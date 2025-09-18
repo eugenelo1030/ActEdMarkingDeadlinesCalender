@@ -1,0 +1,7 @@
+services:
+  - type: web
+    name: calendar-server
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: python calendar_server.py --host 0.0.0.0 --port $PORT
+    plan: free
