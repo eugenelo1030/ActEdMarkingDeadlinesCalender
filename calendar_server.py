@@ -12,6 +12,7 @@ from datetime import datetime, date
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs
 from ics import Calendar, Event
+from ics.grammar.parse import ContentLine
 import threading
 import time
 
@@ -448,17 +449,17 @@ class CalendarHandler(BaseHTTPRequestHandler):
         # Add individual module group calendars
         for group in groups:
             group_name = {
-                'CM1': 'CM1 Assignment Deadlines September 2026',
-                'CM2': 'CM2 Assignment Deadlines September 2026',
-                'CS1': 'CS1 Assignment Deadlines September 2026',
-                'CS2': 'CS2 Assignment Deadlines September 2026',
-                'CB': 'CB Assignment Deadlines September 2026',
-                'CP1': 'CP1 Assignment Deadlines September 2026',
-                'CP2': 'CP2 Assignment Deadlines September 2026',
-                'CP3': 'CP3 Assignment Deadlines September 2026',
-                'SP': 'SP Assignment Deadlines September 2026',
-                'SA': 'SA Assignment Deadlines September 2026'
-            }.get(group, f"{group} Assignment Deadlines September 2026")
+                'CM1': 'CM1 Assignment Deadlines April 2026',
+                'CM2': 'CM2 Assignment Deadlines April 2026',
+                'CS1': 'CS1 Assignment Deadlines April 2026',
+                'CS2': 'CS2 Assignment Deadlines April 2026',
+                'CB': 'CB Assignment Deadlines April 2026',
+                'CP1': 'CP1 Assignment Deadlines April 2026',
+                'CP2': 'CP2 Assignment Deadlines April 2026',
+                'CP3': 'CP3 Assignment Deadlines April 2026',
+                'SP': 'SP Assignment Deadlines April 2026',
+                'SA': 'SA Assignment Deadlines April 2026'
+            }.get(group, f"{group} Assignment Deadlines April 2026")
 
             # Use environment variable for URL or detect from request
             if 'RAILWAY_STATIC_URL' in os.environ:
@@ -515,10 +516,10 @@ class CalendarHandler(BaseHTTPRequestHandler):
         filename = path.split('/')[-1]
         if filename == 'all.ics':
             module_group = None
-            calendar_name = "All Assignment Deadlines September 2026"
+            calendar_name = "All Assignment Deadlines April 2026"
         else:
             module_group = filename.replace('.ics', '').upper()
-            calendar_name = f"{module_group} Assignment Deadlines September 2026"
+            calendar_name = f"{module_group} Marking Deadlines April 2026"
 
         # Generate calendar
         calendar = self.generate_calendar(module_group, calendar_name)
@@ -548,7 +549,12 @@ class CalendarHandler(BaseHTTPRequestHandler):
     def generate_calendar(self, module_group, calendar_name):
         """Generate ICS calendar for the specified module group."""
         calendar = Calendar()
-        calendar.creator = f"Assignment Deadlines Calendar - {calendar_name}"
+        calendar.creator = f"{calendar_name}"
+
+        # Set calendar name properties for better display in calendar apps
+        calendar.extra.append(ContentLine('X-WR-CALNAME', value=calendar_name))
+        calendar.extra.append(ContentLine('X-WR-CALDESC', value=f'ActEd {calendar_name}'))
+        calendar.extra.append(ContentLine('NAME', value=calendar_name))
 
         # Get deadlines from database
         deadlines = self.db.get_deadlines_by_group(module_group)
@@ -591,8 +597,9 @@ def main():
     import argparse
 
     parser = argparse.ArgumentParser(description='Assignment Deadlines Calendar Server')
-    parser.add_argument('--port', type=int, default=int(os.environ.get('PORT', 8080)), help='Server port (default: 8080)')
-    parser.add_argument('--host', default=os.environ.get('HOST', 'localhost'), help='Server host (default: localhost)')
+    parser.add_argument('--port', type=int, default=int(os.environ.get('CALENDAR_PORT', 8080)), help='Server port (default: 8080)')
+    parser.add_argument('--host', default=os.environ.get('CALENDAR_HOST',
+                        '0.0.0.0'), help='Server host (default: localhost)')
     parser.add_argument('--import', dest='import_file', help='Import deadlines from TSV file')
     parser.add_argument('--db', default='deadlines.db', help='Database file path (default: deadlines.db)')
 
