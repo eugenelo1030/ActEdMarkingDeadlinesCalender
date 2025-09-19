@@ -463,11 +463,11 @@ class CalendarHandler(BaseHTTPRequestHandler):
             # Use environment variable for URL or detect from request
             if 'RAILWAY_STATIC_URL' in os.environ:
                 base_host = os.environ['RAILWAY_STATIC_URL']
-                https_base_url = f"https://{base_host}"
+                https_base_url = f"webcal://{base_host}"
             else:
                 host_header = self.headers.get('Host', 'localhost:8080')
                 base_host = host_header
-                https_base_url = f"https://{host_header}" if host_header != 'localhost:8080' else f"http://{host_header}"
+                https_base_url = f"webcal://{host_header}" if host_header != 'localhost:8080' else f"webcal://{host_header}"
 
             # Create both webcal and https URLs
             https_url = f"{https_base_url}/calendar/{group.lower()}.ics"
