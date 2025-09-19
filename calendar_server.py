@@ -187,30 +187,238 @@ class CalendarHandler(BaseHTTPRequestHandler):
         body { font-family: Arial, sans-serif; margin: 40px; }
         .calendar-link { margin: 10px 0; padding: 10px; background: #f5f5f5; border-radius: 5px; }
         .calendar-link a { text-decoration: none; color: #0066cc; font-weight: bold; }
-        .calendar-link .url { font-family: monospace; color: #666; font-size: 0.9em; }
+        .calendar-link .url-container {
+            display: flex;
+            align-items: center;
+            margin-top: 5px;
+            background: white;
+            padding: 8px;
+            border-radius: 4px;
+            border: 1px solid #ddd;
+        }
+        .calendar-link .url {
+            font-family: monospace;
+            color: #666;
+            font-size: 0.9em;            
+            margin-right: 10px;
+            word-break: break-all;
+        }
+        .copy-btn {
+            background: #0066cc;
+            color: white;
+            border: none;
+            padding: 5px 10px;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 12px;
+            white-space: nowrap;
+            transition: background 0.3s;
+        }
+        .copy-btn:hover {
+            background: #0052a3;
+        }
+        .copy-btn.copied {
+            background: #28a745;
+        }
         .instructions { background: #e8f4f8; padding: 20px; border-radius: 5px; margin: 20px 0; }
     </style>
+    <script>
+        function copyToClipboard(text, button) {
+            // Create a temporary textarea element
+            const textarea = document.createElement('textarea');
+            textarea.value = text;
+            textarea.style.position = 'fixed';
+            textarea.style.opacity = '0';
+            document.body.appendChild(textarea);
+
+            // Select and copy the text
+            textarea.select();
+            textarea.setSelectionRange(0, 99999); // For mobile devices
+
+            try {
+                document.execCommand('copy');
+                // Show success feedback
+                const originalText = button.innerHTML;
+                button.innerHTML = '✓ Copied!';
+                button.classList.add('copied');
+
+                // Reset button after 2 seconds
+                setTimeout(() => {
+                    button.innerHTML = originalText;
+                    button.classList.remove('copied');
+                }, 2000);
+            } catch (err) {
+                // Fallback for older browsers
+                alert('Press Ctrl+C (or Cmd+C on Mac) to copy');
+            }
+
+            // Remove the temporary element
+            document.body.removeChild(textarea);
+        }
+    </script>
 </head>
 <body>
     <h1>Assignment Deadlines Calendar Subscription</h1>
 
     <div class="instructions">
-        <h3>Two Options Available:</h3>
+        <h2>📅 Calendar Import Instructions</h2>
 
-        <h4>🔄 Auto-Updating Subscription (Recommended)</h4>
-        <ol>
-            <li>Copy the subscription URL below</li>
-            <li>In your calendar app, choose "Add Calendar" → "From URL" (not "Import")</li>
-            <li>Paste the URL</li>
-            <li>Calendar automatically updates when deadlines change</li>
-        </ol>
+        <div style="background: #fff3cd; padding: 15px; border-radius: 5px; margin-bottom: 20px;">
+            <strong>⚠️ Important:</strong> For automatic updates, use "Subscribe" or "Add from URL" (not "Import").
+            Importing creates a one-time copy that won't update when deadlines change.
+        </div>
 
-        <h4>📥 One-Time Download</h4>
-        <ol>
-            <li>Right-click any calendar link below → "Save Link As"</li>
-            <li>Import the downloaded .ics file into your calendar app</li>
-            <li>⚠️ No automatic updates - you'll need to re-import if deadlines change</li>
-        </ol>
+        <h3>Microsoft Outlook</h3>
+        <details style="margin-bottom: 15px;">
+            <summary style="cursor: pointer; font-weight: bold; padding: 10px; background: #f0f0f0; border-radius: 5px;">
+                📧 Click to expand Outlook instructions
+            </summary>
+            <div style="padding: 15px; border-left: 3px solid #0078d4;">
+                <h4>Desktop App (Windows/Mac):</h4>
+                <ol>
+                    <li>Copy the calendar URL below</li>
+                    <li>In Outlook, go to File → Account Settings → Account Settings</li>
+                    <li>Click the "Internet Calendars" tab</li>
+                    <li>Click "New" and paste the URL</li>
+                    <li>Give it a name and click OK</li>
+                    <li>The calendar will appear in your calendar list</li>
+                </ol>
+
+                <h4>Outlook Web (Browser):</h4>
+                <ol>
+                    <li>Copy the calendar URL below</li>
+                    <li>Go to outlook.com and sign in</li>
+                    <li>Click the Calendar icon</li>
+                    <li>Click "Add calendar" in the left sidebar</li>
+                    <li>Choose "Subscribe from web"</li>
+                    <li>Paste the URL and give it a name</li>
+                    <li>Click "Import"</li>
+                </ol>
+
+                <h4>Outlook Mobile App:</h4>
+                <ol>
+                    <li>First add the calendar using desktop/web method above</li>
+                    <li>Open Outlook mobile app</li>
+                    <li>Tap the calendar icon at bottom</li>
+                    <li>Tap the menu (☰) and check the subscribed calendar</li>
+                </ol>
+            </div>
+        </details>
+
+        <h3>Google Calendar</h3>
+        <details style="margin-bottom: 15px;">
+            <summary style="cursor: pointer; font-weight: bold; padding: 10px; background: #f0f0f0; border-radius: 5px;">
+                🗓️ Click to expand Google Calendar instructions
+            </summary>
+            <div style="padding: 15px; border-left: 3px solid #4285f4;">
+                <h4>Desktop Browser:</h4>
+                <ol>
+                    <li>Copy the calendar URL below</li>
+                    <li>Open Google Calendar (calendar.google.com)</li>
+                    <li>On the left, next to "Other calendars" click the + button</li>
+                    <li>Select "From URL"</li>
+                    <li>Paste the calendar URL</li>
+                    <li>Click "Add calendar"</li>
+                    <li>The calendar will appear in your list</li>
+                </ol>
+
+                <h4>Google Calendar Mobile App:</h4>
+                <ol>
+                    <li>First add the calendar using the browser method above</li>
+                    <li>Open Google Calendar app</li>
+                    <li>Tap the menu (☰) icon</li>
+                    <li>Scroll down to find your subscribed calendar</li>
+                    <li>Make sure it's checked to display events</li>
+                </ol>
+
+                <p><strong>Note:</strong> Google Calendar doesn't support direct URL subscription on mobile.
+                You must add it via web browser first.</p>
+            </div>
+        </details>
+
+        <h3>Apple Calendar</h3>
+        <details style="margin-bottom: 15px;">
+            <summary style="cursor: pointer; font-weight: bold; padding: 10px; background: #f0f0f0; border-radius: 5px;">
+                🍎 Click to expand Apple Calendar instructions
+            </summary>
+            <div style="padding: 15px; border-left: 3px solid #007aff;">
+                <h4>Mac Desktop:</h4>
+                <ol>
+                    <li>Copy the calendar URL below</li>
+                    <li>Open Calendar app</li>
+                    <li>From the menu bar, choose File → New Calendar Subscription</li>
+                    <li>Paste the URL and click Subscribe</li>
+                    <li>Choose settings (color, alerts, update frequency)</li>
+                    <li>Click OK</li>
+                </ol>
+
+                <h4>iPhone/iPad:</h4>
+                <ol>
+                    <li>Copy the calendar URL below</li>
+                    <li>Go to Settings → Calendar → Accounts</li>
+                    <li>Tap "Add Account"</li>
+                    <li>Select "Other"</li>
+                    <li>Tap "Add Subscribed Calendar"</li>
+                    <li>Paste the URL in the Server field</li>
+                    <li>Tap "Next" and then "Save"</li>
+                </ol>
+
+                <h4>Alternative iPhone/iPad Method:</h4>
+                <ol>
+                    <li>Click on a calendar link below using Safari</li>
+                    <li>A popup will ask if you want to subscribe</li>
+                    <li>Tap "Subscribe"</li>
+                    <li>Adjust settings if needed and tap "Done"</li>
+                </ol>
+            </div>
+        </details>
+
+        <h3>Android Calendars</h3>
+        <details style="margin-bottom: 15px;">
+            <summary style="cursor: pointer; font-weight: bold; padding: 10px; background: #f0f0f0; border-radius: 5px;">
+                🤖 Click to expand Android instructions
+            </summary>
+            <div style="padding: 15px; border-left: 3px solid #3ddc84;">
+                <h4>Samsung Calendar:</h4>
+                <ol>
+                    <li>Copy the calendar URL below</li>
+                    <li>Open Samsung Calendar app</li>
+                    <li>Tap the menu (☰) icon</li>
+                    <li>Tap Settings → Manage calendars</li>
+                    <li>Tap "Add account" → "Other"</li>
+                    <li>Select "Subscribe to calendar"</li>
+                    <li>Paste the URL and follow prompts</li>
+                </ol>
+
+                <h4>Other Android Apps (via Google Calendar):</h4>
+                <ol>
+                    <li>First add to Google Calendar using browser (see Google Calendar section)</li>
+                    <li>The calendar will sync to your Android device automatically</li>
+                    <li>Open your calendar app and ensure the subscribed calendar is visible</li>
+                </ol>
+
+                <h4>Using ICSx⁵ App (Universal Android Solution):</h4>
+                <ol>
+                    <li>Install ICSx⁵ from Google Play Store (free)</li>
+                    <li>Copy the calendar URL below</li>
+                    <li>Open ICSx⁵ and tap the + button</li>
+                    <li>Paste the URL</li>
+                    <li>Configure sync settings</li>
+                    <li>The calendar will appear in your default calendar app</li>
+                </ol>
+            </div>
+        </details>
+
+        <h3>Quick Tips</h3>
+        <div style="background: #e8f4f8; padding: 15px; border-radius: 5px; margin-top: 20px;">
+            <ul style="margin: 0;">
+                <li><strong>Subscribe vs Import:</strong> Always choose "Subscribe" or "From URL" for automatic updates</li>
+                <li><strong>Update Frequency:</strong> Most apps check for updates every few hours to daily</li>
+                <li><strong>Colors:</strong> You can usually customize calendar colors in your app settings</li>
+                <li><strong>Notifications:</strong> Set up alerts for deadlines in your calendar app preferences</li>
+                <li><strong>Troubleshooting:</strong> If events don't appear, check that the calendar is enabled/visible in your app</li>
+            </ul>
+        </div>
     </div>
 
     <h2>Available Calendars:</h2>
@@ -236,29 +444,35 @@ class CalendarHandler(BaseHTTPRequestHandler):
                 base_url = f"https://{os.environ['RAILWAY_STATIC_URL']}"
             else:
                 host_header = self.headers.get('Host', 'localhost:8080')
-                base_url = f"https://{host_header}" if host_header != 'localhost:8080' else f"http://{host_header}"
+                base_url = f"{host_header}" if host_header != 'localhost:8080' else f"http://{host_header}"
             calendar_url = f"{base_url}/calendar/{group.lower()}.ics"
 
             html += f'''
     <div class="calendar-link">
-        <a href="{calendar_url}">{group_name}</a><br>
-        <span class="url">https://{calendar_url}</span>
+        <div>{group_name}</div>
+        <!-- <a href="{calendar_url}">{group_name}</a>-->
+        <div class="url-container">
+            <span class="url">{calendar_url}</span>
+            <button class="copy-btn" onclick="copyToClipboard('{calendar_url}', this)">📋 Copy URL</button>
+        </div>
     </div>'''
 
         # Add combined calendar
         all_calendar_url = f"{base_url}/calendar/all.ics"
         html += f'''
     <div class="calendar-link">
-        <a href="{all_calendar_url}">ALL - All Assignment Deadlines</a><br>
-        <span class="url">{all_calendar_url}</span>
+        <a href="{all_calendar_url}">ALL - All Assignment Deadlines</a>
+        <div class="url-container">
+            <span class="url">{all_calendar_url}</span>
+            <button class="copy-btn" onclick="copyToClipboard('{all_calendar_url}', this)">📋 Copy URL</button>
+        </div>
     </div>'''
 
         html += '''
-    <h2>Manual Download:</h2>
-    <p>You can also download static ICS files by clicking the links above.</p>
-
-    <h2>Update Data:</h2>
-    <p>To update deadline data, use: <code>python calendar_server.py --import your_file.tsv</code></p>
+    <hr style="margin-top: 30px;">
+    <h3>Alternative: Manual Download</h3>
+    <p>You can also download static ICS files by right-clicking the links above and selecting "Save Link As".</p>
+    <p style="color: #666;">Note: Downloaded files won't update automatically. You'll need to re-download when deadlines change.</p>
 </body>
 </html>'''
 
