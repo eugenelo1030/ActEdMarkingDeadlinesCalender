@@ -233,17 +233,16 @@ class CalendarHandler(BaseHTTPRequestHandler):
 
             # Use environment variable for URL or detect from request
             if 'RAILWAY_STATIC_URL' in os.environ:
-                base_url = os.environ['RAILWAY_STATIC_URL']
+                base_url = f"https://{os.environ['RAILWAY_STATIC_URL']}"
             else:
                 host_header = self.headers.get('Host', 'localhost:8080')
                 base_url = f"https://{host_header}" if host_header != 'localhost:8080' else f"http://{host_header}"
-
             calendar_url = f"{base_url}/calendar/{group.lower()}.ics"
 
             html += f'''
     <div class="calendar-link">
         <a href="{calendar_url}">{group_name}</a><br>
-        <span class="url">{calendar_url}</span>
+        <span class="url">https://{calendar_url}</span>
     </div>'''
 
         # Add combined calendar
