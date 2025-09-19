@@ -187,6 +187,22 @@ class CalendarHandler(BaseHTTPRequestHandler):
         body { font-family: Arial, sans-serif; margin: 40px; }
         .calendar-link { margin: 10px 0; padding: 10px; background: #f5f5f5; border-radius: 5px; }
         .calendar-link a { text-decoration: none; color: #0066cc; font-weight: bold; }
+        .subscribe-btn {
+            display: inline-block;
+            background: #28a745;
+            color: white;
+            padding: 8px 16px;
+            border-radius: 5px;
+            text-decoration: none;
+            font-weight: bold;
+            margin-bottom: 10px;
+            transition: background 0.3s;
+        }
+        .subscribe-btn:hover {
+            background: #218838;
+            color: white;
+            text-decoration: none;
+        }
         .calendar-link .url-container {
             display: flex;
             align-items: center;
@@ -262,6 +278,11 @@ class CalendarHandler(BaseHTTPRequestHandler):
 
     <div class="instructions">
         <h2>📅 Calendar Import Instructions</h2>
+
+        <div style="background: #d4edda; padding: 15px; border-radius: 5px; margin-bottom: 20px;">
+            <strong>✅ Quick Subscribe:</strong> Click the green "Subscribe to Calendar" button below to automatically
+            subscribe with your default calendar app. This uses the <code>webcal://</code> protocol for automatic updates.
+        </div>
 
         <div style="background: #fff3cd; padding: 15px; border-radius: 5px; margin-bottom: 20px;">
             <strong>⚠️ Important:</strong> For automatic updates, use "Subscribe" or "Add from URL" (not "Import").
@@ -441,30 +462,37 @@ class CalendarHandler(BaseHTTPRequestHandler):
 
             # Use environment variable for URL or detect from request
             if 'RAILWAY_STATIC_URL' in os.environ:
-                base_url = f"https://{os.environ['RAILWAY_STATIC_URL']}"
+                base_host = os.environ['RAILWAY_STATIC_URL']
+                https_base_url = f"https://{base_host}"
             else:
                 host_header = self.headers.get('Host', 'localhost:8080')
-                base_url = f"{host_header}" if host_header != 'localhost:8080' else f"http://{host_header}"
-            calendar_url = f"{base_url}/calendar/{group.lower()}.ics"
+                base_host = host_header
+                https_base_url = f"https://{host_header}" if host_header != 'localhost:8080' else f"http://{host_header}"
+
+            # Create both webcal and https URLs
+            https_url = f"{https_base_url}/calendar/{group.lower()}.ics"
+            webcal_url = f"webcal://{base_host}/calendar/{group.lower()}.ics"
 
             html += f'''
     <div class="calendar-link">
-        <div>{group_name}</div>
-        <!-- <a href="{calendar_url}">{group_name}</a>-->
+        <div style="font-weight: bold; margin-bottom: 10px;">{group_name}</div>
+        <a href="{webcal_url}" class="subscribe-btn">🔄 Subscribe to Calendar</a>
         <div class="url-container">
-            <span class="url">{calendar_url}</span>
-            <button class="copy-btn" onclick="copyToClipboard('{calendar_url}', this)">📋 Copy URL</button>
+            <span class="url">{https_url}</span>
+            <button class="copy-btn" onclick="copyToClipboard('{https_url}', this)">📋 Copy URL</button>
         </div>
     </div>'''
 
         # Add combined calendar
-        all_calendar_url = f"{base_url}/calendar/all.ics"
+        all_https_url = f"{https_base_url}/calendar/all.ics"
+        all_webcal_url = f"webcal://{base_host}/calendar/all.ics"
         html += f'''
     <div class="calendar-link">
-        <a href="{all_calendar_url}">ALL - All Assignment Deadlines</a>
+        <div style="font-weight: bold; margin-bottom: 10px;">ALL - All Assignment Deadlines</div>
+        <a href="{all_webcal_url}" class="subscribe-btn">🔄 Subscribe to Calendar</a>
         <div class="url-container">
-            <span class="url">{all_calendar_url}</span>
-            <button class="copy-btn" onclick="copyToClipboard('{all_calendar_url}', this)">📋 Copy URL</button>
+            <span class="url">{all_https_url}</span>
+            <button class="copy-btn" onclick="copyToClipboard('{all_https_url}', this)">📋 Copy URL</button>
         </div>
     </div>'''
 
