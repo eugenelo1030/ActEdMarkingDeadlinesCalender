@@ -220,7 +220,7 @@ class CalendarHandler(BaseHTTPRequestHandler):
             border-radius: 5px;
             position: relative;
         }
-        .calendar-link a { text-decoration: none; color: #0066cc; font-weight: bold; }
+        .calendar-link a { text-decoration: none; font-weight: bold; }
         .subscribe-btn {
             display: inline-block;
             background: #28a745;
