@@ -173,6 +173,8 @@ class CalendarHandler(BaseHTTPRequestHandler):
             self.serve_calendar(path, query_params)
         elif path == '/api/groups':
             self.serve_groups()
+        elif path == '/api/deadlines':
+            self.serve_deadlines(query_params)
         elif path == '/favicon.ico':
             # Return empty favicon to avoid 404 errors
             self.send_response(204)  # No Content
@@ -184,13 +186,40 @@ class CalendarHandler(BaseHTTPRequestHandler):
         """Serve a simple index page with available calendars."""
         groups = self.db.get_module_groups()
 
+        # Get last update time - try Railway deploy time first, fallback to database last modified time
+        last_update = None
+        if 'RAILWAY_DEPLOYMENT_ID' in os.environ:
+            # Railway provides deployment timestamp
+            last_update = datetime.now().strftime('%Y-%m-%d %H:%M:%S UTC')
+        else:
+            # Fallback to database file modification time
+            try:
+                db_mtime = os.path.getmtime(self.db.db_path)
+                last_update = datetime.fromtimestamp(db_mtime).strftime('%Y-%m-%d %H:%M:%S')
+            except:
+                last_update = "Unknown"
+
         html = '''<!DOCTYPE html>
 <html>
 <head>
     <title>Assignment Deadlines Calendar Subscription</title>
     <style>
         body { font-family: Arial, sans-serif; margin: 40px; }
-        .calendar-link { margin: 10px 0; padding: 10px; background: #f5f5f5; border-radius: 5px; }
+        .last-update {
+            background: #e8f4f8;
+            padding: 10px;
+            border-radius: 5px;
+            margin: 10px 0;
+            font-size: 0.9em;
+            color: #666;
+        }
+        .calendar-link {
+            margin: 10px 0;
+            padding: 10px;
+            background: #f5f5f5;
+            border-radius: 5px;
+            position: relative;
+        }
         .calendar-link a { text-decoration: none; color: #0066cc; font-weight: bold; }
         .subscribe-btn {
             display: inline-block;
@@ -241,9 +270,201 @@ class CalendarHandler(BaseHTTPRequestHandler):
         .copy-btn.copied {
             background: #28a745;
         }
-        .instructions { background: #e8f4f8; padding: 20px; border-radius: 5px; margin: 20px 0; }
+        .instructions {
+            background: #e8f4f8;
+            padding: 0;
+            border-radius: 5px;
+            margin: 20px 0;
+        }
+        .instructions-header {
+            padding: 20px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            user-select: none;
+            background: #d4edda;
+            border-radius: 5px;
+        }
+        .instructions-header:hover {
+            background: #c3e6cb;
+        }
+        .instructions-content {
+            padding: 20px;
+            display: none;
+        }
+        .instructions.expanded .instructions-content {
+            display: block;
+        }
+        .instructions.expanded .instructions-header {
+            border-radius: 5px 5px 0 0;
+        }
+        .chevron {
+            transition: transform 0.3s;
+            font-size: 1.2em;
+        }
+        .instructions.expanded .chevron {
+            transform: rotate(90deg);
+        }
+        .info-icon {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            background: #0066cc;
+            color: white;
+            border-radius: 50%;
+            text-align: center;
+            line-height: 20px;
+            cursor: pointer;
+            font-size: 12px;
+            margin-left: 10px;
+            transition: background 0.3s;
+        }
+        .info-icon:hover {
+            background: #0052a3;
+        }
+        /* Modal Styles */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgba(0,0,0,0.4);
+        }
+        .modal-content {
+            background-color: #fefefe;
+            margin: 5% auto;
+            padding: 0;
+            border: 1px solid #888;
+            width: 80%;
+            max-width: 700px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        .modal-header {
+            padding: 20px;
+            background: #0066cc;
+            color: white;
+            border-radius: 8px 8px 0 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .modal-body {
+            padding: 20px;
+            max-height: 60vh;
+            overflow-y: auto;
+        }
+        .close {
+            color: white;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+            line-height: 20px;
+        }
+        .close:hover,
+        .close:focus {
+            opacity: 0.8;
+            text-decoration: none;
+        }
+        .deadline-item {
+            padding: 10px;
+            border-bottom: 1px solid #eee;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .deadline-item:last-child {
+            border-bottom: none;
+        }
+        .deadline-module {
+            font-weight: bold;
+            color: #0066cc;
+        }
+        .deadline-date {
+            background: #f0f0f0;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 0.9em;
+        }
+        .deadline-recommend {
+            color: #666;
+            font-size: 0.85em;
+            margin-top: 4px;
+        }
     </style>
     <script>
+        function toggleInstructions() {
+            const instructions = document.getElementById('instructions-panel');
+            instructions.classList.toggle('expanded');
+        }
+
+        function showDeadlines(moduleGroup) {
+            const modal = document.getElementById('deadlineModal');
+            const modalTitle = document.getElementById('modalTitle');
+            const modalBody = document.getElementById('modalBody');
+
+            modalTitle.textContent = moduleGroup + ' Assignment Deadlines';
+            modalBody.innerHTML = 'Loading...';
+            modal.style.display = 'block';
+
+            // Fetch deadlines from the server
+            fetch('/api/deadlines?group=' + moduleGroup)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.deadlines && data.deadlines.length > 0) {
+                        let html = '';
+                        data.deadlines.forEach(deadline => {
+                            const deadlineDate = new Date(deadline.deadline_date);
+                            const formattedDate = deadlineDate.toLocaleDateString('en-GB', {
+                                day: '2-digit',
+                                month: 'short',
+                                year: 'numeric'
+                            });
+
+                            html += '<div class="deadline-item">';
+                            html += '<div>';
+                            html += '<div class="deadline-module">' + deadline.module_code + ' ' + deadline.assignment_code + '</div>';
+                            if (deadline.recommend_date) {
+                                const recommendDate = new Date(deadline.recommend_date);
+                                const formattedRecommend = recommendDate.toLocaleDateString('en-GB', {
+                                    day: '2-digit',
+                                    month: 'short',
+                                    year: 'numeric'
+                                });
+                                html += '<div class="deadline-recommend">Recommended: ' + formattedRecommend + '</div>';
+                            }
+                            html += '</div>';
+                            html += '<div class="deadline-date">' + formattedDate + '</div>';
+                            html += '</div>';
+                        });
+                        modalBody.innerHTML = html;
+                    } else {
+                        modalBody.innerHTML = '<p>No deadlines found for this module group.</p>';
+                    }
+                })
+                .catch(error => {
+                    modalBody.innerHTML = '<p>Error loading deadlines. Please try again.</p>';
+                    console.error('Error:', error);
+                });
+        }
+
+        function closeModal() {
+            document.getElementById('deadlineModal').style.display = 'none';
+        }
+
+        // Close modal when clicking outside of it
+        window.onclick = function(event) {
+            const modal = document.getElementById('deadlineModal');
+            if (event.target == modal) {
+                modal.style.display = 'none';
+            }
+        }
+
         function copyToClipboard(text, button) {
             // Create a temporary textarea element
             const textarea = document.createElement('textarea');
@@ -281,8 +502,29 @@ class CalendarHandler(BaseHTTPRequestHandler):
 <body>
     <h1>Assignment Deadlines Calendar Subscription</h1>
 
-    <div class="instructions">
-        <h2>📅 Calendar Import Instructions</h2>
+    <div class="last-update">
+        <strong>📅 Last Updated:</strong> ''' + (last_update if last_update else 'Unknown') + '''
+    </div>
+
+    <!-- Modal for deadlines -->
+    <div id="deadlineModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="modalTitle">Deadlines</h2>
+                <span class="close" onclick="closeModal()">&times;</span>
+            </div>
+            <div class="modal-body" id="modalBody">
+                <!-- Deadlines will be loaded here -->
+            </div>
+        </div>
+    </div>
+
+    <div class="instructions expanded" id="instructions-panel">
+        <div class="instructions-header" onclick="toggleInstructions()">
+            <h2 style="margin: 0;">📅 Calendar Import Instructions</h2>
+            <span class="chevron">▶</span>
+        </div>
+        <div class="instructions-content">
 
         <div style="background: #d4edda; padding: 15px; border-radius: 5px; margin-bottom: 20px;">
             <strong>✅ Quick Subscribe:</strong> Click the green "Subscribe to Calendar" button below to automatically
@@ -445,6 +687,7 @@ class CalendarHandler(BaseHTTPRequestHandler):
                 <li><strong>Troubleshooting:</strong> If events don't appear, check that the calendar is enabled/visible in your app</li>
             </ul>
         </div>
+        </div>
     </div>
 
     <h2>Available Calendars:</h2>
@@ -480,7 +723,10 @@ class CalendarHandler(BaseHTTPRequestHandler):
 
             html += f'''
     <div class="calendar-link">
-        <div style="font-weight: bold; margin-bottom: 10px;">{group_name}</div>
+        <div style="font-weight: bold; margin-bottom: 10px;">
+            {group_name}
+            <span class="info-icon" onclick="showDeadlines('{group}')" title="View deadlines">ℹ</span>
+        </div>
         <a href="{webcal_url}" class="subscribe-btn">🔄 Subscribe to Calendar</a>
         <div class="url-container">
             <span class="url">{https_url}</span>
@@ -493,7 +739,10 @@ class CalendarHandler(BaseHTTPRequestHandler):
         all_webcal_url = f"webcal://{base_host}/calendar/all.ics"
         html += f'''
     <div class="calendar-link">
-        <div style="font-weight: bold; margin-bottom: 10px;">ALL - All Assignment Deadlines</div>
+        <div style="font-weight: bold; margin-bottom: 10px;">
+            ALL - All Assignment Deadlines
+            <span class="info-icon" onclick="showDeadlines('ALL')" title="View all deadlines">ℹ</span>
+        </div>
         <a href="{all_webcal_url}" class="subscribe-btn">🔄 Subscribe to Calendar</a>
         <div class="url-container">
             <span class="url">{all_https_url}</span>
@@ -548,6 +797,34 @@ class CalendarHandler(BaseHTTPRequestHandler):
         self.end_headers()
 
         response = {'groups': groups}
+        self.wfile.write(json.dumps(response).encode('utf-8'))
+
+    def serve_deadlines(self, query_params):
+        """Serve deadlines for a specific module group as JSON."""
+        module_group = query_params.get('group', [None])[0]
+
+        if module_group == 'ALL':
+            module_group = None
+
+        deadlines = self.db.get_deadlines_by_group(module_group)
+
+        # Format deadlines for JSON response
+        formatted_deadlines = []
+        for module_code, assignment_code, title, deadline_date, recommend_date in deadlines:
+            formatted_deadlines.append({
+                'module_code': module_code,
+                'assignment_code': assignment_code,
+                'title': title,
+                'deadline_date': deadline_date,
+                'recommend_date': recommend_date
+            })
+
+        self.send_response(200)
+        self.send_header('Content-Type', 'application/json')
+        self.send_header('Access-Control-Allow-Origin', '*')
+        self.end_headers()
+
+        response = {'deadlines': formatted_deadlines}
         self.wfile.write(json.dumps(response).encode('utf-8'))
 
     def generate_calendar(self, module_group, calendar_name):

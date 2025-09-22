@@ -2,7 +2,17 @@
   "permissions": {
     "allow": [
       "WebFetch(domain:docs.railway.app)",
-      "WebFetch(domain:docs.railway.com)"
+      "WebFetch(domain:docs.railway.com)",
+      "Bash(python:*)",
+      "Bash(where python3)",
+      "Bash(python3:*)",
+      "Bash(where py)",
+      "Bash(.......venvScriptsactivate)",
+      "Bash(\"..\\..\\..\\.venv\\Scripts\\python.exe\" calendar_server.py --port 8081)",
+      "Read(//c/Users/elo/OneDrive - BPP SERVICES LIMITED/Documents/Admin2-public/Admin2-public/**)",
+      "Bash(\"../../../.venv/Scripts/python.exe\" calendar_server.py --port 8081)",
+      "Bash(\"C:/Users/elo/OneDrive - BPP SERVICES LIMITED/Documents/Admin2-public/Admin2-public/.venv/Scripts/python.exe\" calendar_server.py --port 8081)",
+      "Bash(curl:*)"
     ],
     "deny": [],
     "ask": []
