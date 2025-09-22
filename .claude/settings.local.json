@@ -17,6 +17,7 @@
       "Bash(sqlite3:*)"
     ],
     "deny": [],
+    "defaultMode": "bypassPermissions",
     "ask": []
   }
 }
