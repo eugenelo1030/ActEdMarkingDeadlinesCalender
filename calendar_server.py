@@ -409,15 +409,17 @@ class CalendarHandler(BaseHTTPRequestHandler):
             const modalBody = document.getElementById('modalBody');
 
             modalTitle.textContent = moduleGroup + ' Assignment Deadlines';
-            modalBody.innerHTML = 'Loading...';
+            modalBody.textContent = 'Loading...';
             modal.style.display = 'block';
 
             // Fetch deadlines from the server
             fetch('/api/deadlines?group=' + moduleGroup)
                 .then(response => response.json())
                 .then(data => {
+                    // Clear modal body safely
+                    modalBody.innerHTML = '';
+
                     if (data.deadlines && data.deadlines.length > 0) {
-                        let html = '';
                         data.deadlines.forEach(deadline => {
                             const deadlineDate = new Date(deadline.deadline_date);
                             const formattedDate = deadlineDate.toLocaleDateString('en-GB', {
@@ -426,9 +428,20 @@ class CalendarHandler(BaseHTTPRequestHandler):
                                 year: 'numeric'
                             });
 
-                            html += '<div class="deadline-item">';
-                            html += '<div>';
-                            html += '<div class="deadline-module">' + deadline.module_code + ' ' + deadline.assignment_code + '</div>';
+                            // Create deadline item container
+                            const deadlineItem = document.createElement('div');
+                            deadlineItem.className = 'deadline-item';
+
+                            // Create left container
+                            const leftContainer = document.createElement('div');
+
+                            // Create module info element safely
+                            const moduleDiv = document.createElement('div');
+                            moduleDiv.className = 'deadline-module';
+                            moduleDiv.textContent = deadline.module_code + ' ' + deadline.assignment_code;
+                            leftContainer.appendChild(moduleDiv);
+
+                            // Add recommended date if exists
                             if (deadline.recommend_date) {
                                 const recommendDate = new Date(deadline.recommend_date);
                                 const formattedRecommend = recommendDate.toLocaleDateString('en-GB', {
@@ -436,19 +449,34 @@ class CalendarHandler(BaseHTTPRequestHandler):
                                     month: 'short',
                                     year: 'numeric'
                                 });
-                                html += '<div class="deadline-recommend">Recommended: ' + formattedRecommend + '</div>';
+
+                                const recommendDiv = document.createElement('div');
+                                recommendDiv.className = 'deadline-recommend';
+                                recommendDiv.textContent = 'Recommended: ' + formattedRecommend;
+                                leftContainer.appendChild(recommendDiv);
                             }
-                            html += '</div>';
-                            html += '<div class="deadline-date">' + formattedDate + '</div>';
-                            html += '</div>';
+
+                            // Create date element
+                            const dateDiv = document.createElement('div');
+                            dateDiv.className = 'deadline-date';
+                            dateDiv.textContent = formattedDate;
+
+                            // Append all elements
+                            deadlineItem.appendChild(leftContainer);
+                            deadlineItem.appendChild(dateDiv);
+                            modalBody.appendChild(deadlineItem);
                         });
-                        modalBody.innerHTML = html;
                     } else {
-                        modalBody.innerHTML = '<p>No deadlines found for this module group.</p>';
+                        const noDeadlinesP = document.createElement('p');
+                        noDeadlinesP.textContent = 'No deadlines found for this module group.';
+                        modalBody.appendChild(noDeadlinesP);
                     }
                 })
                 .catch(error => {
-                    modalBody.innerHTML = '<p>Error loading deadlines. Please try again.</p>';
+                    const errorP = document.createElement('p');
+                    errorP.textContent = 'Error loading deadlines. Please try again.';
+                    modalBody.innerHTML = '';
+                    modalBody.appendChild(errorP);
                     console.error('Error:', error);
                 });
         }
