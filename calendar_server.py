@@ -173,6 +173,10 @@ class CalendarHandler(BaseHTTPRequestHandler):
             self.serve_calendar(path, query_params)
         elif path == '/api/groups':
             self.serve_groups()
+        elif path == '/favicon.ico':
+            # Return empty favicon to avoid 404 errors
+            self.send_response(204)  # No Content
+            self.end_headers()
         else:
             self.send_error(404, "Calendar not found")
 
