@@ -15,6 +15,88 @@ from ics import Calendar, Event
 from ics.grammar.parse import ContentLine
 import threading
 import time
+from collections import defaultdict
+from pathlib import Path
+
+# Load environment variables from .env file if it exists
+def load_env_file():
+    """Load environment variables from .env file."""
+    env_path = Path(__file__).parent / '.env'
+    if env_path.exists():
+        with open(env_path, 'r') as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith('#') and '=' in line:
+                    key, value = line.split('=', 1)
+                    os.environ.setdefault(key.strip(), value.strip())
+
+load_env_file()
+
+
+class RateLimiter:
+    """Simple in-memory rate limiter using sliding window."""
+
+    def __init__(self, max_requests=100, window_seconds=60):
+        self.max_requests = max_requests
+        self.window_seconds = window_seconds
+        self.requests = defaultdict(list)
+        self.lock = threading.Lock()
+
+    def is_allowed(self, client_ip):
+        """Check if request from client_ip is allowed."""
+        if not os.environ.get('RATE_LIMIT_ENABLED', 'true').lower() == 'true':
+            return True
+
+        current_time = time.time()
+
+        with self.lock:
+            # Remove old requests outside the window
+            self.requests[client_ip] = [
+                req_time for req_time in self.requests[client_ip]
+                if current_time - req_time < self.window_seconds
+            ]
+
+            # Check if limit exceeded
+            if len(self.requests[client_ip]) >= self.max_requests:
+                return False
+
+            # Add current request
+            self.requests[client_ip].append(current_time)
+            return True
+
+    def cleanup_old_entries(self):
+        """Periodic cleanup of old entries to prevent memory bloat."""
+        current_time = time.time()
+        with self.lock:
+            # Remove IPs with no recent requests
+            ips_to_remove = [
+                ip for ip, times in self.requests.items()
+                if not times or (current_time - times[-1]) > self.window_seconds * 2
+            ]
+            for ip in ips_to_remove:
+                del self.requests[ip]
+
+
+def validate_db_path(db_path):
+    """Validate database path to prevent path traversal attacks."""
+    # Get absolute path of the application directory
+    app_dir = Path(__file__).parent.resolve()
+
+    # Get absolute path of the requested database
+    db_path_abs = (app_dir / db_path).resolve()
+
+    # Ensure the database path is within the application directory
+    try:
+        db_path_abs.relative_to(app_dir)
+    except ValueError:
+        raise ValueError(f"Database path must be within application directory: {app_dir}")
+
+    # Ensure it's a .db file
+    if db_path_abs.suffix != '.db':
+        raise ValueError("Database file must have .db extension")
+
+    return str(db_path_abs)
+
 
 class DeadlineDatabase:
     """Simple SQLite database for storing deadlines."""
@@ -157,12 +239,24 @@ class DeadlineDatabase:
 class CalendarHandler(BaseHTTPRequestHandler):
     """HTTP request handler for calendar subscription endpoints."""
 
-    def __init__(self, *args, db_instance=None, **kwargs):
+    def __init__(self, *args, db_instance=None, rate_limiter=None, **kwargs):
         self.db = db_instance
+        self.rate_limiter = rate_limiter
         super().__init__(*args, **kwargs)
 
     def do_GET(self):
         """Handle GET requests for calendar subscriptions."""
+        # Rate limiting check
+        if self.rate_limiter:
+            client_ip = self.client_address[0]
+            if not self.rate_limiter.is_allowed(client_ip):
+                self.send_response(429)  # Too Many Requests
+                self.send_header('Content-Type', 'text/plain')
+                self.send_header('Retry-After', '60')
+                self.end_headers()
+                self.wfile.write(b'Rate limit exceeded. Please try again later.')
+                return
+
         parsed_path = urlparse(self.path)
         path = parsed_path.path
         query_params = parse_qs(parsed_path.query)
@@ -894,10 +988,10 @@ class CalendarHandler(BaseHTTPRequestHandler):
         print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] {format % args}")
 
 
-def create_handler_with_db(db_instance):
-    """Create handler class with database instance."""
+def create_handler_with_db(db_instance, rate_limiter=None):
+    """Create handler class with database instance and rate limiter."""
     def handler(*args, **kwargs):
-        return CalendarHandler(*args, db_instance=db_instance, **kwargs)
+        return CalendarHandler(*args, db_instance=db_instance, rate_limiter=rate_limiter, **kwargs)
     return handler
 
 
@@ -910,12 +1004,19 @@ def main():
     parser.add_argument('--host', default=os.environ.get('CALENDAR_HOST',
                         '0.0.0.0'), help='Server host (default: localhost)')
     parser.add_argument('--import', dest='import_file', help='Import deadlines from TSV file')
-    parser.add_argument('--db', default='deadlines.db', help='Database file path (default: deadlines.db)')
+    parser.add_argument('--db', default=os.environ.get('DB_PATH', 'deadlines.db'), help='Database file path (default: deadlines.db)')
 
     args = parser.parse_args()
 
+    # Validate database path to prevent path traversal
+    try:
+        safe_db_path = validate_db_path(args.db)
+    except ValueError as e:
+        print(f"Error: {e}")
+        sys.exit(1)
+
     # Initialize database
-    db = DeadlineDatabase(args.db)
+    db = DeadlineDatabase(safe_db_path)
 
     # Import data if specified
     if args.import_file:
@@ -926,8 +1027,22 @@ def main():
             print(f"Error: File {args.import_file} not found")
             return
 
+    # Initialize rate limiter
+    max_requests = int(os.environ.get('RATE_LIMIT_MAX_REQUESTS', 100))
+    window_seconds = int(os.environ.get('RATE_LIMIT_WINDOW_SECONDS', 60))
+    rate_limiter = RateLimiter(max_requests=max_requests, window_seconds=window_seconds)
+
+    # Start cleanup thread for rate limiter
+    def cleanup_loop():
+        while True:
+            time.sleep(window_seconds * 2)
+            rate_limiter.cleanup_old_entries()
+
+    cleanup_thread = threading.Thread(target=cleanup_loop, daemon=True)
+    cleanup_thread.start()
+
     # Create and start server
-    handler_class = create_handler_with_db(db)
+    handler_class = create_handler_with_db(db, rate_limiter)
     server = HTTPServer((args.host, args.port), handler_class)
 
     print(f"Starting calendar server on http://{args.host}:{args.port}")
